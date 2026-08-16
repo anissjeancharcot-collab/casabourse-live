@@ -1,6 +1,4 @@
-cloudscraper>=1.2.71
+playwright>=1.45.0
 beautifulsoup4>=4.12.3
 pandas>=2.2.0
 lxml>=5.1.0
-requests>=2.31.0
-urllib3>=2.0.0
