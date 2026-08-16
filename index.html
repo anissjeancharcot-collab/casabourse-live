@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bourse de Casablanca — Terminal de Marché</title>
+  
+  <!-- Polices Google Fonts : Inter (UI) & JetBrains Mono (Données numériques) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ==========================================================================
+       1. VARIABLES & PALETTE TYPE "TERMINAL BLOOMBERG / TRADING DARK"
+       ========================================================================== */
+    :root {
+      --bg-main: #0B0E14;
+      --bg-card: #121824;
+      --bg-card-hover: #182030;
+      --bg-table-header: #151D2C;
+      --border-color: #222F44;
+      --border-subtle: #1A2435;
+      
+      --text-primary: #F1F5F9;
+      --text-secondary: #94A3B8;
+      --text-muted: #64748B;
+      
+      /* Accents Boursiers */
+      --bullish: #10B981;        /* Vert Hausse (+0.46%) */
+      --bullish-bg: rgba(16, 185, 129, 0.12);
+      --bearish: #F43F5E;        /* Rouge Baisse (-2.70%) */
+      --bearish-bg: rgba(244, 63, 94, 0.12);
+      --neutral: #94A3B8;        /* Inchangé */
+      --neutral-bg: rgba(148, 163, 184, 0.10);
+      
+      --accent-cyan: #06B6D4;
+      --accent-blue: #3B82F6;
+      --gold: #F59E0B;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-main);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+
+    /* Tabular numerals pour alignement financier parfait */
+    .num, td.num-cell {
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1.5rem 1.25rem;
+      flex: 1;
+    }
+
+    /* ==========================================================================
+       2. HEADER & BARRE D'ÉTAT DU MARCHÉ
+       ========================================================================== */
+    header {
+      background-color: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      padding: 1.25rem 0;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(12px);
+    }
+
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #0EA5E9, #3B82F6);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #FFF;
+      font-weight: 700;
+      font-size: 1.1rem;
+      box-shadow: 0 4px 12px rgba(14, 165, 233, 0.25);
+    }
+
+    .brand-text h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #FFF;
+    }
+
+    .brand-text p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .market-status-box {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background-color: var(--bg-main);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--bullish);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--bullish);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .date-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .date-value {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ==========================================================================
+       3. CARTES KPI (RÉSUMÉ DU MARCHÉ)
+       ========================================================================== */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .kpi-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent-cyan);
+    }
+
+    .kpi-title {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .kpi-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .kpi-value.bullish { color: var(--bullish); }
+    .kpi-value.bearish { color: var(--bearish); }
+
+    /* ==========================================================================
+       4. BARRE D'OUTILS & FILTRES
+       ========================================================================== */
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      position: relative;
+      flex: 1;
+      max-width: 360px;
+      min-width: 240px;
+    }
+
+    .search-input {
+      width: 100%;
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 0.6rem 1rem 0.6rem 2.4rem;
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .search-input:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.15);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 0.8rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+      font-size: 0.9rem;
+    }
+
+    .filter-tabs {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .tab-btn {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 0.5rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover, .tab-btn.active {
+      background-color: var(--bg-table-header);
+      color: #FFF;
+      border-color: var(--accent-blue);
+    }
+
+    /* ==========================================================================
+       5. TABLEAU DE COTATIONS
+       ========================================================================== */
+    .table-container {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow-x: auto;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.875rem;
+      white-space: nowrap;
+    }
+
+    thead tr {
+      background-color: var(--bg-table-header);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+      padding: 0.9rem 1.1rem;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+      transition: color 0.15s ease;
+    }
+
+    th:hover {
+      color: var(--accent-cyan);
+    }
+
+    th.th-right, td.td-right {
+      text-align: right;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border-subtle);
+      transition: background-color 0.15s ease;
+    }
+
+    tbody tr:hover {
+      background-color: var(--bg-card-hover);
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    td {
+      padding: 0.85rem 1.1rem;
+      color: var(--text-primary);
+    }
+
+    .stock-name-cell {
+      font-weight: 600;
+      color: #FFF;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Badges de variation conditionnelle */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0.25rem 0.5rem;
+      border-radius: 5px;
+      font-weight: 600;
+      font-size: 0.82rem;
+      min-width: 72px;
+    }
+
+    .badge.hausse {
+      color: var(--bullish);
+      background-color: var(--bullish-bg);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    .badge.baisse {
+      color: var(--bearish);
+      background-color: var(--bearish-bg);
+      border: 1px solid rgba(244, 63, 94, 0.25);
+    }
+
+    .badge.neutre {
+      color: var(--neutral);
+      background-color: var(--neutral-bg);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .var-abs.hausse { color: var(--bullish); }
+    .var-abs.baisse { color: var(--bearish); }
+    .var-abs.neutre { color: var(--text-muted); }
+
+    /* ==========================================================================
+       6. ÉTATS : CHARGEMENT, ERREURS, VIDE
+       ========================================================================== */
+    .state-row td {
+      text-align: center;
+      padding: 3.5rem 1.5rem;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--border-color);
+      border-top-color: var(--accent-cyan);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error-banner {
+      background-color: rgba(244, 63, 94, 0.1);
+      border: 1px solid var(--bearish);
+      color: #FECDD3;
+      padding: 1rem 1.25rem;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .btn-retry {
+      background-color: var(--bearish);
+      color: #FFF;
+      border: none;
+      padding: 0.4rem 0.8rem;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.8rem;
+    }
+
+    /* ==========================================================================
+       7. FOOTER
+       ========================================================================== */
+    footer {
+      border-top: 1px solid var(--border-color);
+      padding: 1.25rem 0;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background-color: var(--bg-card);
+      margin-top: 2rem;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ========================================================================
+       SQUELETTE HTML VIDÉ DE TOUTE DONNÉE BOURSIÈRE EN DUR
+       ======================================================================== -->
+  <header>
+    <div class="container header-content">
+      <div class="brand">
+        <div class="brand-icon">BVC</div>
+        <div class="brand-text">
+          <h1>Bourse de Casablanca</h1>
+          <p>Tableau de bord des cotations officielles</p>
+        </div>
+      </div>
+      
+      <!-- Placeholder de la date injecté dynamiquement par le JS -->
+      <div class="market-status-box">
+        <div class="status-dot"></div>
+        <div>
+          <div class="date-label">Séance du marché</div>
+          <div class="date-value" id="date-maj">Chargement...</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    
+    <!-- Bannière d'erreur conditionnelle -->
+    <div id="error-banner" class="error-banner">
+      <span id="error-message"></span>
+      <button class="btn-retry" onclick="fetchMarketData()">Réessayer</button>
+    </div>
+
+    <!-- Résumé KPI du Marché (Injecté par JS) -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <span class="kpi-title">Titres Cotés</span>
+        <span class="kpi-value" id="kpi-total">—</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-title">Hausses</span>
+        <span class="kpi-value bullish" id="kpi-hausses">—</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-title">Baisses</span>
+        <span class="kpi-value bearish" id="kpi-baisses">—</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-title">Inchangées</span>
+        <span class="kpi-value" id="kpi-inchangees">—</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-title">Volume Global (Titres)</span>
+        <span class="kpi-value" id="kpi-volume">—</span>
+      </div>
+    </section>
+
+    <!-- Outils de recherche et filtres de tableau -->
+    <div class="toolbar">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" class="search-input" placeholder="Rechercher une valeur (ex. Maroc Telecom)..." />
+      </div>
+      <div class="filter-tabs">
+        <button class="tab-btn active" data-filter="all">Toutes</button>
+        <button class="tab-btn" data-filter="hausse">Hausses</button>
+        <button class="tab-btn" data-filter="baisse">Baisses</button>
+      </div>
+    </div>
+
+    <!-- Tableau de cotation (Coquille d'architecture pure) -->
+    <div class="table-container">
+      <table id="market-table">
+        <thead>
+          <tr>
+            <th onclick="sortTable('nom')">Valeur ↕</th>
+            <th class="th-right" onclick="sortTable('cours')">Cours (MAD) ↕</th>
+            <th class="th-right" onclick="sortTable('variation_pct')">Var. % ↕</th>
+            <th class="th-right" onclick="sortTable('variation_abs')">Var. Abs (MAD) ↕</th>
+            <th class="th-right" onclick="sortTable('plus_haut')">+ Haut ↕</th>
+            <th class="th-right" onclick="sortTable('plus_bas')">+ Bas ↕</th>
+            <th class="th-right" onclick="sortTable('volume')">Volume (Titres) ↕</th>
+          </tr>
+        </thead>
+        <!-- TBODY STRICTEMENT VIDE AU CHARGEMENT INITIAL -->
+        <tbody id="table-body">
+          <tr class="state-row">
+            <td colspan="7">
+              <div class="spinner"></div>
+              Récupération des données boursières en cours...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      Bourse de Casablanca — Terminal automatisé via GitHub Actions & GitHub Pages
+    </div>
+  </footer>
+
+  <!-- ========================================================================
+       JAVASCRIPT NATIF (VANILLA JS) — INGESTION & FORMATAGE CONDITIONNEL
+       ======================================================================== -->
+  <script>
+    // État global des données
+    let rawStocksData = [];
+    let currentFilter = 'all';
+    let sortColumn = 'nom';
+    let sortAscending = true;
+
+    // Formatteur numérique pour les montants financiers (MAD)
+    const currencyFormatter = new Intl.NumberFormat('fr-MA', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+
+    // Formatteur entier avec séparateur de milliers (espaces) pour les volumes
+    const volumeFormatter = new Intl.NumberFormat('fr-MA', {
+      maximumFractionDigits: 0
+    });
+
+    /**
+     * 1. Fonction Asynchrone principale de récupération du JSON
+     */
+    async function fetchMarketData() {
+      const dateEl = document.getElementById('date-maj');
+      const errorBanner = document.getElementById('error-banner');
+      const errorMsg = document.getElementById('error-message');
+      const tbody = document.getElementById('table-body');
+
+      // État de chargement initial
+      errorBanner.style.display = 'none';
+      tbody.innerHTML = `
+        <tr class="state-row">
+          <td colspan="7">
+            <div class="spinner"></div>
+            Récupération des cotations officielles en cours...
+          </td>
+        </tr>
+      `;
+
+      try {
+        // Cache-busting (?t=Date.now()) pour forcer la dernière version de GitHub Pages
+        const response = await fetch('cotations.json?t=' + Date.now());
+        
+        if (!response.ok) {
+          throw new Error(`Fichier introuvable (Code HTTP ${response.status})`);
+        }
+
+        const data = await response.json();
+
+        // Validation minimale de la structure du JSON
+        if (!data || !Array.isArray(data.valeurs)) {
+          throw new Error("Structure JSON invalide : clé 'valeurs' absente ou non conforme.");
+        }
+
+        // Injection de la date de séance dans l'en-tête
+        dateEl.textContent = data.date_maj || "Clôture de séance";
+
+        // Sauvegarde des données brutes
+        rawStocksData = data.valeurs;
+
+        // Mise à jour des KPI résumés
+        updateMarketKPIs(rawStocksData);
+
+        // Rendu du tableau
+        renderTable();
+
+      } catch (err) {
+        console.error("Erreur d'ingestion des cotations :", err);
+        dateEl.textContent = "Indisponible";
+        
+        // Affichage de l'alerte d'erreur
+        errorMsg.textContent = `Impossible de charger cotations.json : ${err.message}. Vérifiez que le scraper a bien généré le fichier à la racine du dépôt.`;
+        errorBanner.style.display = 'flex';
+
+        tbody.innerHTML = `
+          <tr class="state-row">
+            <td colspan="7" style="color: var(--bearish);">
+              ⚠️ Erreur de chargement des cotations boursières.
+            </td>
+          </tr>
+        `;
+      }
+    }
+
+    /**
+     * 2. Rendu dynamique du <tbody> avec formatage conditionnel
+     */
+    function renderTable() {
+      const tbody = document.getElementById('table-body');
+      const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
+
+      // Filtrage par nom et par onglet (hausse / baisse)
+      let filtered = rawStocksData.filter(stock => {
+        const matchesSearch = stock.nom.toLowerCase().includes(searchTerm);
+        
+        const varStr = String(stock.variation_pct || '');
+        const isHausse = varStr.includes('+');
+        const isBaisse = varStr.includes('-');
+
+        if (currentFilter === 'hausse') return matchesSearch && isHausse;
+        if (currentFilter === 'baisse') return matchesSearch && isBaisse;
+        return matchesSearch;
+      });
+
+      // Tri
+      filtered.sort((a, b) => {
+        let valA = a[sortColumn];
+        let valB = b[sortColumn];
+
+        // Nettoyage pour les comparaisons numériques si chaîne avec % ou +
+        if (typeof valA === 'string' && (valA.includes('%') || valA.includes('+') || valA.includes('-'))) {
+          valA = parseFloat(valA.replace('%', '').replace('+', '').trim()) || 0;
+        }
+        if (typeof valB === 'string' && (valB.includes('%') || valB.includes('+') || valB.includes('-'))) {
+          valB = parseFloat(valB.replace('%', '').replace('+', '').trim()) || 0;
+        }
+
+        if (valA < valB) return sortAscending ? -1 : 1;
+        if (valA > valB) return sortAscending ? 1 : -1;
+        return 0;
+      });
+
+      // Gestion du cas vide (recherche sans résultat)
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr class="state-row">
+            <td colspan="7">Aucune action trouvée correspondant à vos critères.</td>
+          </tr>
+        `;
+        return;
+      }
+
+      // Construction des lignes <tr> et cellules <td>
+      const rowsHtml = filtered.map(stock => {
+        const varPctStr = String(stock.variation_pct || '0.00%');
+        const varAbsStr = String(stock.variation_abs || '0.00');
+
+        // Logique de classe conditionnelle (+ = hausse, - = baisse, 0 = neutre)
+        let stateClass = 'neutre';
+        if (varPctStr.includes('+') || (!varPctStr.includes('-') && parseFloat(varPctStr) > 0)) {
+          stateClass = 'hausse';
+        } else if (varPctStr.includes('-') || parseFloat(varPctStr) < 0) {
+          stateClass = 'baisse';
+        }
+
+        // Formatage sécurisé des nombres
+        const coursFormatted = stock.cours !== null && stock.cours !== undefined 
+          ? currencyFormatter.format(stock.cours) 
+          : '—';
+          
+        const plusHautFormatted = stock.plus_haut !== null && stock.plus_haut !== undefined 
+          ? currencyFormatter.format(stock.plus_haut) 
+          : '—';
+          
+        const plusBasFormatted = stock.plus_bas !== null && stock.plus_bas !== undefined 
+          ? currencyFormatter.format(stock.plus_bas) 
+          : '—';
+          
+        const volumeFormatted = stock.volume !== null && stock.volume !== undefined 
+          ? volumeFormatter.format(stock.volume) 
+          : '0';
+
+        return `
+          <tr>
+            <td>
+              <div class="stock-name-cell">
+                <span>${escapeHtml(stock.nom)}</span>
+              </div>
+            </td>
+            <td class="td-right num-cell font-weight-bold">${coursFormatted}</td>
+            <td class="td-right">
+              <span class="badge ${stateClass} num">${escapeHtml(varPctStr)}</span>
+            </td>
+            <td class="td-right num-cell var-abs ${stateClass}">${escapeHtml(varAbsStr)}</td>
+            <td class="td-right num-cell">${plusHautFormatted}</td>
+            <td class="td-right num-cell">${plusBasFormatted}</td>
+            <td class="td-right num-cell">${volumeFormatted}</td>
+          </tr>
+        `;
+      }).join('');
+
+      tbody.innerHTML = rowsHtml;
+    }
+
+    /**
+     * 3. Calcul dynamique des KPI de synthèse du marché
+     */
+    function updateMarketKPIs(stocks) {
+      let hausses = 0;
+      let baisses = 0;
+      let inchangees = 0;
+      let totalVolume = 0;
+
+      stocks.forEach(s => {
+        const v = String(s.variation_pct || '');
+        if (v.includes('+')) hausses++;
+        else if (v.includes('-')) baisses++;
+        else inchangees++;
+
+        if (s.volume) totalVolume += Number(s.volume) || 0;
+      });
+
+      document.getElementById('kpi-total').textContent = stocks.length;
+      document.getElementById('kpi-hausses').textContent = hausses;
+      document.getElementById('kpi-baisses').textContent = baisses;
+      document.getElementById('kpi-inchangees').textContent = inchangees;
+      document.getElementById('kpi-volume').textContent = volumeFormatter.format(totalVolume);
+    }
+
+    /**
+     * 4. Tri par colonne interactif
+     */
+    function sortTable(column) {
+      if (sortColumn === column) {
+        sortAscending = !sortAscending;
+      } else {
+        sortColumn = column;
+        sortAscending = (column === 'nom'); // Par défaut ascendant pour les noms, descendant pour les chiffres
+      }
+      renderTable();
+    }
+
+    /**
+     * 5. Échappement anti-XSS des données injectées
+     */
+    function escapeHtml(str) {
+      if (typeof str !== 'string') return str;
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    /**
+     * 6. Écouteurs d'événements (Recherche & Filtres)
+     */
+    document.getElementById('search-input').addEventListener('input', renderTable);
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        currentFilter = e.target.dataset.filter;
+        renderTable();
+      });
+    });
+
+    // Lancement de l'ingestion au chargement du DOM
+    document.addEventListener('DOMContentLoaded', fetchMarketData);
+  </script>
+</body>
+</html>
