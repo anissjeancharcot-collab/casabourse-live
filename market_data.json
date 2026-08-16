@@ -1,0 +1,100 @@
+{
+  "last_updated": "2026-08-16 18:39:00",
+  "indices": {
+    "masi": {
+      "name": "MASI",
+      "value": 13856.4,
+      "changePct": 0.78
+    }
+  },
+  "stocks": [
+    {
+      "ticker": "ATW",
+      "name": "Attijariwafa bank",
+      "sector": "Banques",
+      "price": 564.0,
+      "variation": 1.62,
+      "volume": 49.8,
+      "marketCap": 121.2,
+      "per": 15.2,
+      "yield": 3.85
+    },
+    {
+      "ticker": "BCP",
+      "name": "Banque Centrale Populaire",
+      "sector": "Banques",
+      "price": 312.0,
+      "variation": 1.29,
+      "volume": 31.2,
+      "marketCap": 63.6,
+      "per": 14.1,
+      "yield": 3.55
+    },
+    {
+      "ticker": "IAM",
+      "name": "Maroc Telecom",
+      "sector": "Télécommunications",
+      "price": 96.9,
+      "variation": 0.2,
+      "volume": 35.6,
+      "marketCap": 85.2,
+      "per": 15.4,
+      "yield": 4.95
+    },
+    {
+      "ticker": "AKT",
+      "name": "Akdital",
+      "sector": "Santé & Pharmacie",
+      "price": 1052.0,
+      "variation": 3.64,
+      "volume": 41.2,
+      "marketCap": 43.6,
+      "per": 38.5,
+      "yield": 1.2
+    },
+    {
+      "ticker": "TGC",
+      "name": "TGCC",
+      "sector": "BTP & Matériaux",
+      "price": 389.0,
+      "variation": 4.29,
+      "volume": 21.4,
+      "marketCap": 12.3,
+      "per": 22.4,
+      "yield": 2.8
+    },
+    {
+      "ticker": "LHM",
+      "name": "LafargeHolcim Maroc",
+      "sector": "BTP & Matériaux",
+      "price": 1988.0,
+      "variation": 1.22,
+      "volume": 24.1,
+      "marketCap": 46.6,
+      "per": 21.0,
+      "yield": 3.75
+    },
+    {
+      "ticker": "ADH",
+      "name": "Douja Promotion Addoha",
+      "sector": "Immobilier",
+      "price": 39.1,
+      "variation": 7.12,
+      "volume": 44.5,
+      "marketCap": 15.8,
+      "per": 28.0,
+      "yield": 0.0
+    },
+    {
+      "ticker": "MNG",
+      "name": "Managem",
+      "sector": "Mines",
+      "price": 2865.0,
+      "variation": 2.32,
+      "volume": 22.4,
+      "marketCap": 28.6,
+      "per": 26.0,
+      "yield": 1.8
+    }
+  ]
+}
