@@ -2,15 +2,15 @@ name: Ingestion Quotidienne Bourse de Casablanca
 
 on:
   schedule:
-    # Exécution du lundi au vendredi à 15h15 UTC (soit 16h15 heure marocaine GMT+1)
+    # 15h15 UTC = 16h15 heure marocaine (GMT+1)
     - cron: '15 15 * * 1-5'
-  workflow_dispatch: # Permet le déclenchement manuel depuis l'interface GitHub Actions
+  workflow_dispatch:
 
 jobs:
   scrape-and-commit:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Requis pour pousser les commits sur le dépôt
+      contents: write
 
     steps:
       - name: Checkout du dépôt
@@ -31,19 +31,18 @@ jobs:
         run: |
           python scraper.py
 
-      - name: Commit et Push automatique des données
+      - name: Commit et Push des cotations
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Ajout des fichiers générés dans le dossier data/
-          git add data/
+          # Ajoute cotations.json à la racine ET le dossier data/
+          git add cotations.json data/
           
-          # Vérifier si des modifications existent avant de commit (évite les erreurs si pas de changement)
           if git diff --staged --quiet; then
-            echo "Aucune nouvelle modification détectée. Pas de commit nécessaire."
+            echo "Aucune modification à commiter."
           else
             TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
-            git commit -m "chore(data): actualisation des cotations BVC - ${TIMESTAMP} [skip ci]"
+            git commit -m "chore(data): actualisation des cotations boursières - ${TIMESTAMP} [skip ci]"
             git push origin main
           fi
