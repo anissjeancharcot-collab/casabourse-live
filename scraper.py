@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Scraper Bourse de Casablanca — Contournement Cloudflare / 403 WAF
+Scraper Bourse de Casablanca avec Playwright (Bypass Cloudflare Turnstile / 403)
 Génère le fichier cotations.json pour le dashboard GitHub Pages.
 """
 
 import os
 import re
 import json
-import time
-import random
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 
-import cloudscraper
+from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 import pandas as pd
 
@@ -26,43 +24,18 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
-logger = logging.getLogger("BVC_Scraper")
+logger = logging.getLogger("BVC_Playwright_Scraper")
 
-# ---------------------------------------------------------------------------
-# Configuration & URLs
-# ---------------------------------------------------------------------------
-BASE_URL = "https://medias24.com"
 TARGET_URL = "https://medias24.com/leboursier/marches-boursier"
-OUTPUT_JSON_ROOT = "cotations.json"  # Lu directement par index.html
+OUTPUT_JSON_ROOT = "cotations.json"
 DATA_DIR = "data"
 
-# En-têtes complets simulant fidèlement un navigateur Chrome réel
-BROWSER_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/127.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Referer": "https://medias24.com/",
-    "Sec-Ch-Ua": '"Not)A;Brand";v="99", "Google Chrome";v="127", "Chromium";v="127"',
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"Windows"',
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "same-origin",
-    "Sec-Fetch-User": "?1",
-    "Upgrade-Insecure-Requests": "1"
-}
-
 
 # ---------------------------------------------------------------------------
-# Fonctions de Nettoyage & Conversion
+# Nettoyage des données numériques
 # ---------------------------------------------------------------------------
 def clean_number(value_str: Optional[str]) -> Optional[float]:
-    """Convertit les nombres avec virgules et espaces en float."""
+    """Convertit une chaîne numérique en float."""
     if not value_str:
         return None
     val = str(value_str).strip()
@@ -84,7 +57,7 @@ def clean_number(value_str: Optional[str]) -> Optional[float]:
 
 
 def clean_stock_name(raw_name: str) -> str:
-    """Retire les libellés de sous-menus du DOM."""
+    """Nettoie le nom de l'action."""
     unwanted = [
         "Fiche valeur",
         "Transactions de la journée une par une",
@@ -99,7 +72,6 @@ def clean_stock_name(raw_name: str) -> str:
 
 
 def format_variation_pct(val_float: Optional[float], raw_str: str) -> str:
-    """Garantit le format '+0.46%' ou '-2.70%'."""
     if val_float is None:
         return "0.00%"
     prefix = "+" if val_float > 0 else ""
@@ -107,7 +79,6 @@ def format_variation_pct(val_float: Optional[float], raw_str: str) -> str:
 
 
 def format_variation_abs(val_float: Optional[float]) -> str:
-    """Garantit le format '+0.45' ou '-49.95'."""
     if val_float is None:
         return "0.00"
     prefix = "+" if val_float > 0 else ""
@@ -115,60 +86,67 @@ def format_variation_abs(val_float: Optional[float]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Ingestion avec Contournement Cloudflare (cloudscraper)
+# Récupération de la page via Playwright (Chromium)
 # ---------------------------------------------------------------------------
-def fetch_html_with_cloudscraper() -> str:
-    """
-    Simule une session utilisateur humaine avec cloudscraper :
-    1. Navigation sur la page d'accueil pour obtenir les cookies de session WAF.
-    2. Délai d'attente aléatoire (2 à 4 secondes).
-    3. Requête vers la page des marchés boursiers.
-    """
-    logger.info("Initialisation du scraper anti-Cloudflare...")
+def fetch_page_with_playwright(url: str = TARGET_URL) -> str:
+    """Lance Chromium headless pour contourner Cloudflare et récupérer le HTML."""
+    logger.info("Démarrage du navigateur Chromium via Playwright...")
     
-    # Création du scraper émulant un navigateur Chrome sous Windows
-    scraper = cloudscraper.create_scraper(
-        browser={
-            'browser': 'chrome',
-            'platform': 'windows',
-            'desktop': True
-        },
-        delay=random.uniform(2.0, 4.0)
-    )
-    scraper.headers.update(BROWSER_HEADERS)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled"
+            ]
+        )
+        
+        # Contexte avec profil de navigateur standard
+        context = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/127.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1920, "height": 1080},
+            locale="fr-FR",
+            timezone_id="Africa/Casablanca"
+        )
+        
+        page = context.new_page()
+        
+        # Masquer les flags d'automatisation
+        page.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+        """)
 
-    try:
-        # Étape 1 : Visite de la racine pour générer les cookies
-        logger.info(f"Étape 1/2 : Visite de pré-chauffage ({BASE_URL})...")
-        home_res = scraper.get(BASE_URL, timeout=30)
-        logger.info(f"Statut page d'accueil : {home_res.status_code}")
-
-        # Simulation d'un comportement humain
-        sleep_time = random.uniform(2.5, 4.5)
-        logger.info(f"Délai d'attente humain : {sleep_time:.2f}s...")
-        time.sleep(sleep_time)
-
-        # Étape 2 : Récupération de la page cible
-        logger.info(f"Étape 2/2 : Téléchargement des cotations ({TARGET_URL})...")
-        target_res = scraper.get(TARGET_URL, timeout=30)
-        target_res.raise_for_status()
-
-        logger.info("Page récupérée avec succès (HTTP 200).")
-        return target_res.text
-
-    except Exception as e:
-        logger.error(f"Erreur lors du scraping cloudscraper : {e}")
-        raise
+        logger.info(f"Navigation vers {url}...")
+        # Attente jusqu'à ce que le réseau soit calme
+        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        
+        # Attente explicite du rendu du tableau
+        logger.info("Attente du chargement du tableau boursier...")
+        page.wait_for_selector("table", timeout=30000)
+        
+        # Pause de 3 secondes pour laisser le temps aux scripts dynamiques de s'exécuter
+        page.wait_for_timeout(3000)
+        
+        content = page.content()
+        browser.close()
+        logger.info("Page HTML extraite avec succès.")
+        return content
 
 
 # ---------------------------------------------------------------------------
-# Extraction des Données du Tableau
+# Extraction & Parsing
 # ---------------------------------------------------------------------------
 def parse_stock_table(html_content: str) -> Tuple[str, List[Dict[str, Any]]]:
-    """Parse le tableau et extrait les valeurs boursières."""
     soup = BeautifulSoup(html_content, "html.parser")
 
-    # Localisation dynamique du tableau des variations
     target_table = None
     for table in soup.find_all("table"):
         headers = " ".join([th.get_text(strip=True).lower() for th in table.find_all(["th", "td"])])
@@ -177,7 +155,6 @@ def parse_stock_table(html_content: str) -> Tuple[str, List[Dict[str, Any]]]:
                 target_table = table
                 break
 
-    # Fallback si les en-têtes sont absents
     if not target_table:
         for table in soup.find_all("table"):
             rows_with_date = [
@@ -189,7 +166,7 @@ def parse_stock_table(html_content: str) -> Tuple[str, List[Dict[str, Any]]]:
                 break
 
     if not target_table:
-        raise ValueError("Impossible de localiser le tableau des variations dans le code HTML.")
+        raise ValueError("Impossible de localiser le tableau des cotations dans le DOM.")
 
     valeurs = []
     derniere_date_seance = None
@@ -215,7 +192,6 @@ def parse_stock_table(html_content: str) -> Tuple[str, List[Dict[str, Any]]]:
         if not derniere_date_seance and date_str and date_str != '-':
             derniere_date_seance = date_str
 
-        # Format conforme aux attentes du front-end
         valeur_obj = {
             "nom": stock_name,
             "cours": round(raw_cours, 2) if raw_cours is not None else 0.0,
@@ -228,56 +204,49 @@ def parse_stock_table(html_content: str) -> Tuple[str, List[Dict[str, Any]]]:
         valeurs.append(valeur_obj)
 
     date_maj = derniere_date_seance or datetime.now().strftime("%d/%m/%Y à %H:%M")
-    logger.info(f"{len(valeurs)} actions extraites avec succès pour la séance : {date_maj}")
+    logger.info(f"{len(valeurs)} actions extraites avec succès pour la date : {date_maj}")
     return date_maj, valeurs
 
 
 # ---------------------------------------------------------------------------
-# Sauvegarde des Résultats
+# Sauvegarde
 # ---------------------------------------------------------------------------
 def save_results(date_maj: str, valeurs: List[Dict[str, Any]]) -> None:
-    """Enregistre cotations.json à la racine et archive dans data/."""
     os.makedirs(DATA_DIR, exist_ok=True)
     today_str = datetime.now().strftime("%Y-%m-%d")
 
-    # 1. Structure JSON stricte pour le Dashboard
     dashboard_payload = {
         "date_maj": date_maj,
         "valeurs": valeurs
     }
 
-    # Sauvegarde à la racine pour index.html
+    # 1. Sauvegarde pour index.html
     with open(OUTPUT_JSON_ROOT, "w", encoding="utf-8") as f:
         json.dump(dashboard_payload, f, ensure_ascii=False, indent=2)
-    logger.info(f"Fichier principal généré : '{OUTPUT_JSON_ROOT}'")
+    logger.info(f"Fichier généré : '{OUTPUT_JSON_ROOT}'")
 
-    # 2. Sauvegarde horodatée dans data/
-    json_archive = os.path.join(DATA_DIR, f"cotations_{today_str}.json")
-    with open(json_archive, "w", encoding="utf-8") as f:
+    # 2. Archives dans data/
+    with open(os.path.join(DATA_DIR, f"cotations_{today_str}.json"), "w", encoding="utf-8") as f:
         json.dump(dashboard_payload, f, ensure_ascii=False, indent=2)
 
-    # 3. Export CSV dans data/
     df = pd.DataFrame(valeurs)
-    csv_archive = os.path.join(DATA_DIR, f"cotations_{today_str}.csv")
-    csv_latest = os.path.join(DATA_DIR, "cotations_latest.csv")
-    df.to_csv(csv_archive, index=False, encoding="utf-8-sig")
-    df.to_csv(csv_latest, index=False, encoding="utf-8-sig")
-    logger.info(f"Fichiers CSV générés dans '{DATA_DIR}/'")
+    df.to_csv(os.path.join(DATA_DIR, f"cotations_{today_str}.csv"), index=False, encoding="utf-8-sig")
+    df.to_csv(os.path.join(DATA_DIR, "cotations_latest.csv"), index=False, encoding="utf-8-sig")
 
 
 # ---------------------------------------------------------------------------
-# Point d'Entrée
+# Point d'entrée
 # ---------------------------------------------------------------------------
 def main():
     try:
-        html = fetch_html_with_cloudscraper()
+        html = fetch_page_with_playwright()
         date_maj, valeurs = parse_stock_table(html)
         if not valeurs:
-            raise ValueError("Aucune donnée boursière trouvée dans le tableau.")
+            raise ValueError("Aucune donnée boursière trouvée.")
         save_results(date_maj, valeurs)
-        logger.info("=== Pipeline terminé avec succès ===")
+        logger.info("=== Extraction terminée avec succès ===")
     except Exception as e:
-        logger.critical(f"Échec de l'ingestion : {e}", exc_info=True)
+        logger.critical(f"Erreur : {e}", exc_info=True)
         raise SystemExit(1)
 
 
